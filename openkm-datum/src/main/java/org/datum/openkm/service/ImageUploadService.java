@@ -5,6 +5,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
 import org.datum.openkm.client.OpenKMSDKClient;
 import org.datum.openkm.config.OpenKMConfig;
+import org.datum.openkm.dto.ExcelUploadRequest;
 import org.datum.openkm.dto.ImageUploadRequest;
 import org.datum.openkm.dto.ImageUploadResponse;
 import org.datum.openkm.exception.ImageUploadException;
@@ -39,6 +40,12 @@ public class ImageUploadService {
 
     // Tamaño máximo: 50MB
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024;
+
+    // Tipos MIME válidos para Excel
+    private static final Set<String> VALID_EXCEL_MIME_TYPES = Set.of(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+            "application/vnd.ms-excel" // .xls
+    );
 
     /**
      * Sube una imagen a OpenKM.
@@ -143,6 +150,98 @@ public class ImageUploadService {
         String normalizedPath = destinationPath.startsWith("/") ? destinationPath : "/" + destinationPath;
         normalizedPath = normalizedPath.endsWith("/") ? normalizedPath : normalizedPath + "/";
         return normalizedPath + fileName;
+    }
+
+    /**
+     * Sube un documento Excel a OpenKM.
+     *
+     * @param request Datos del documento Excel a subir
+     * @return Respuesta con la información del documento creado
+     * @throws ImageUploadException si ocurre un error durante la subida
+     */
+    public ImageUploadResponse uploadExcelDocument(ExcelUploadRequest request) {
+        try {
+            validateExcelDocument(request);
+
+            String fullPath = buildFullPath(request.getDestinationPath(), request.getFileName());
+            LOG.infof("=== Iniciando subida de documento Excel a OpenKM ===");
+            LOG.infof("Ruta completa: %s", fullPath);
+            LOG.infof("Tamaño: %d bytes", request.getDocumentData().length);
+            LOG.infof("MIME Type: %s", request.getMimeType());
+
+            // Subir a OpenKM usando HTTP Client
+            var document = openKMClient.uploadDocument(
+                    fullPath,
+                    request.getDocumentData(),
+                    request.getMimeType()
+            );
+
+            LOG.infof("Documento Excel subido exitosamente");
+            LOG.infof("Document UUID: %s", document.getUuid());
+            LOG.infof("Document Path: %s", document.getPath());
+            LOG.infof("Document Author: %s", document.getAuthor());
+
+            return ImageUploadResponse.builder()
+                    .documentId(document.getUuid())
+                    .fileName(request.getFileName())
+                    .path(document.getPath())
+                    .size(document.getSize() != null ? document.getSize() : (long) request.getDocumentData().length)
+                    .mimeType(document.getMimeType())
+                    .uploadDate(document.getCreated() != null ? document.getCreated() : LocalDateTime.now())
+                    .message("Documento Excel subido exitosamente a OpenKM")
+                    .success(true)
+                    .build();
+
+        } catch (ImageUploadException e) {
+            throw e;
+        } catch (Exception e) {
+            LOG.error("Error al subir documento Excel a OpenKM", e);
+            throw new ImageUploadException(
+                    "Error al subir el documento Excel: " + e.getMessage(),
+                    Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
+                    e
+            );
+        }
+    }
+
+    /**
+     * Valida los datos del documento Excel antes de subirlo.
+     *
+     * @param request Datos del documento a validar
+     * @throws ImageUploadException si la validación falla
+     */
+    private void validateExcelDocument(ExcelUploadRequest request) {
+        if (request.getDocumentData() == null || request.getDocumentData().length == 0) {
+            throw new ImageUploadException(
+                    "Los datos del documento están vacíos",
+                    Response.Status.BAD_REQUEST.getStatusCode()
+            );
+        }
+
+        if (request.getDocumentData().length > MAX_FILE_SIZE) {
+            throw new ImageUploadException(
+                    String.format("El tamaño del documento excede el límite permitido de %d MB",
+                            MAX_FILE_SIZE / (1024 * 1024)),
+                    Response.Status.BAD_REQUEST.getStatusCode()
+            );
+        }
+
+        if (request.getMimeType() != null && !isValidExcelMimeType(request.getMimeType())) {
+            throw new ImageUploadException(
+                    "Tipo de documento no válido. Formatos permitidos: .xlsx, .xls",
+                    Response.Status.BAD_REQUEST.getStatusCode()
+            );
+        }
+    }
+
+    /**
+     * Verifica si el tipo MIME es válido para un documento Excel.
+     *
+     * @param mimeType Tipo MIME a verificar
+     * @return true si es un tipo MIME válido, false en caso contrario
+     */
+    private boolean isValidExcelMimeType(String mimeType) {
+        return VALID_EXCEL_MIME_TYPES.contains(mimeType.toLowerCase());
     }
 
     /**

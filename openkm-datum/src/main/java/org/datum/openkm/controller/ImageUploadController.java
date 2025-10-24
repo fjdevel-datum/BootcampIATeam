@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.datum.openkm.dto.ExcelUploadRequest;
 import org.datum.openkm.dto.ImageUploadRequest;
 import org.datum.openkm.dto.ImageUploadResponse;
 import org.datum.openkm.dto.ErrorResponse;
@@ -198,5 +199,98 @@ public class ImageUploadController {
     })
     public Response healthCheck() {
         return Response.ok("Image upload service is running").build();
+    }
+
+    @POST
+    @Path("/upload/excel")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Operation(
+        summary = "Subir documento Excel a OpenKM",
+        description = "Sube un documento Excel (.xlsx o .xls) a OpenKM utilizando Multipart Form Data. Soporta documentos de hasta 50MB."
+    )
+    @APIResponses({
+        @APIResponse(
+            responseCode = "201",
+            description = "Documento Excel subido exitosamente",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ImageUploadResponse.class)
+            )
+        ),
+        @APIResponse(
+            responseCode = "400",
+            description = "Error de validación - Archivo inválido o parámetros incorrectos",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @APIResponse(
+            responseCode = "500",
+            description = "Error interno del servidor o error al comunicarse con OpenKM",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    public Response uploadExcel(
+            @RestForm("file") 
+            @Parameter(description = "Archivo Excel a subir (.xlsx o .xls)", required = true)
+            FileUpload file,
+            
+            @RestForm("fileName") 
+            @Parameter(description = "Nombre del archivo en OpenKM", required = true)
+            String fileName,
+            
+            @RestForm("destinationPath") 
+            @Parameter(
+                description = "Ruta de destino en OpenKM (ej: /okm:root/documentos/excel)", 
+                example = "/okm:root/documentos/excel"
+            )
+            String destinationPath,
+            
+            @RestForm("description") 
+            @Parameter(description = "Descripción del documento")
+            String description) {
+        try {
+            LOG.infof("Recibiendo solicitud de subida de documento Excel: %s", fileName);
+
+            // Validar que el archivo no sea nulo
+            if (file == null) {
+                LOG.error("El archivo recibido es nulo");
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity("El archivo es requerido")
+                        .build();
+            }
+
+            // Construir el request con datos del Excel
+            ExcelUploadRequest request = ExcelUploadRequest.builder()
+                    .fileName(fileName != null ? fileName : file.fileName())
+                    .destinationPath(destinationPath != null ? destinationPath : "/okm:root/documentos/excel")
+                    .description(description)
+                    .mimeType(file.contentType() != null ? file.contentType() : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    .build();
+
+            // Leer el archivo y convertirlo a byte[]
+            try {
+                request.setDocumentData(Files.readAllBytes(file.filePath()));
+            } catch (IOException e) {
+                LOG.error("Error al leer el archivo Excel", e);
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity("Error al leer el archivo: " + e.getMessage())
+                        .build();
+            }
+
+            // Llamar al servicio para subir el documento
+            ImageUploadResponse response = imageUploadService.uploadExcelDocument(request);
+            return Response.status(Response.Status.CREATED).entity(response).build();
+
+        } catch (Exception e) {
+            LOG.error("Error en el controlador de subida de documentos Excel", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("Error al procesar la solicitud: " + e.getMessage())
+                    .build();
+        }
     }
 }
