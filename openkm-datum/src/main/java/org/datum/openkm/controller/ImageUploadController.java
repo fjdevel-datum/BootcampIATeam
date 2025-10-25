@@ -274,6 +274,7 @@ public class ImageUploadController {
 
             // Leer el archivo y convertirlo a byte[]
             try {
+                LOG.infof("Leyendo el archivo Excel: %s", Files.readAllBytes(file.filePath()));
                 request.setDocumentData(Files.readAllBytes(file.filePath()));
             } catch (IOException e) {
                 LOG.error("Error al leer el archivo Excel", e);
@@ -288,6 +289,63 @@ public class ImageUploadController {
 
         } catch (Exception e) {
             LOG.error("Error en el controlador de subida de documentos Excel", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("Error al procesar la solicitud: " + e.getMessage())
+                    .build();
+        }
+    }
+
+    @POST
+    @Path("/upload/excel/json")
+    @Operation(
+        summary = "Subir documento Excel a OpenKM usando JSON",
+        description = "Sube un documento Excel a OpenKM utilizando JSON con datos en Base64. Útil para integraciones programáticas."
+    )
+    @APIResponses({
+        @APIResponse(
+            responseCode = "201",
+            description = "Documento Excel subido exitosamente",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ImageUploadResponse.class)
+            )
+        ),
+        @APIResponse(
+            responseCode = "400",
+            description = "Error de validación - Datos inválidos o faltantes",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @APIResponse(
+            responseCode = "500",
+            description = "Error interno del servidor",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON,
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    public Response uploadExcelJson(
+            @Valid 
+            @RequestBody(
+                description = "Datos del documento Excel en formato JSON con contenido en Base64",
+                required = true,
+                content = @Content(
+                    mediaType = MediaType.APPLICATION_JSON,
+                    schema = @Schema(implementation = ExcelUploadRequest.class)
+                )
+            )
+            ExcelUploadRequest request) {
+        try {
+            LOG.infof("Recibiendo solicitud JSON de subida de documento Excel: %s", request.getFileName());
+
+            ImageUploadResponse response = imageUploadService.uploadExcelDocument(request);
+            return Response.status(Response.Status.CREATED).entity(response).build();
+
+        } catch (Exception e) {
+            LOG.error("Error en el controlador de subida de documentos Excel (JSON)", e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
                     .entity("Error al procesar la solicitud: " + e.getMessage())
                     .build();

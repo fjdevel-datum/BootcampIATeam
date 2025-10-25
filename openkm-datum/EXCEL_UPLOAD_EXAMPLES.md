@@ -30,7 +30,9 @@ Este documento contiene ejemplos prácticos de cómo utilizar el endpoint de sub
 
 ### 1. PowerShell (Recomendado para Windows)
 
-#### Ejemplo Básico
+#### Opción A: Multipart/Form-Data (Recomendado)
+
+**Ejemplo Básico**
 ```powershell
 # Usar el script incluido
 .\test-excel-upload.ps1 -FilePath "C:\temp\reporte.xlsx"
@@ -52,11 +54,57 @@ Este documento contiene ejemplos prácticos de cómo utilizar el endpoint de sub
   -DestinationPath "/okm:root/historico"
 ```
 
+#### Opción B: JSON/Base64 (Para Integraciones Programáticas)
+
+**Ejemplo Básico**
+```powershell
+# Usar el script JSON incluido
+.\test-excel-upload-json.ps1 -FilePath "C:\temp\reporte.xlsx"
+```
+
+**Ejemplo con Todos los Parámetros**
+```powershell
+.\test-excel-upload-json.ps1 `
+  -FilePath "C:\documentos\ventas-2025.xlsx" `
+  -BaseUrl "http://localhost:8080" `
+  -DestinationPath "/okm:root/reportes/ventas" `
+  -Description "Reporte de ventas del año 2025 (JSON)"
+```
+
+**Ejemplo Manual (PowerShell)**
+```powershell
+# Leer archivo y convertir a Base64
+$FilePath = "C:\temp\reporte.xlsx"
+$FileBytes = [System.IO.File]::ReadAllBytes($FilePath)
+$Base64Content = [System.Convert]::ToBase64String($FileBytes)
+
+# Crear cuerpo JSON
+$Body = @{
+    fileName = "reporte-ventas.xlsx"
+    destinationPath = "/okm:root/documentos/excel"
+    documentData = $Base64Content
+    description = "Reporte de ventas"
+    mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+} | ConvertTo-Json
+
+# Enviar petición
+$Response = Invoke-RestMethod `
+    -Uri "http://localhost:8080/api/images/upload/excel/json" `
+    -Method POST `
+    -ContentType "application/json" `
+    -Body $Body
+
+# Mostrar respuesta
+$Response | ConvertTo-Json
+```
+
 ---
 
 ### 2. cURL (Multiplataforma)
 
-#### Ejemplo Básico
+#### Opción A: Multipart/Form-Data
+
+**Ejemplo Básico**
 ```bash
 curl -X POST http://localhost:8080/api/images/upload/excel \
   -F "file=@reporte.xlsx" \
@@ -80,6 +128,47 @@ curl -X POST http://localhost:8080/api/images/upload/excel `
 curl -X POST http://localhost:8080/api/images/upload/excel \
   -F "file=@reporte.xlsx" \
   -F "fileName=reporte.xlsx"
+```
+
+#### Opción B: JSON/Base64
+
+**Ejemplo con Base64**
+```bash
+# Convertir archivo a Base64 (Linux/Mac)
+BASE64_CONTENT=$(base64 -w 0 reporte.xlsx)
+
+# Enviar petición JSON
+curl -X POST http://localhost:8080/api/images/upload/excel/json \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fileName": "reporte-ventas.xlsx",
+    "destinationPath": "/okm:root/documentos/excel",
+    "documentData": "'"$BASE64_CONTENT"'",
+    "description": "Reporte de ventas",
+    "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  }'
+```
+
+**Ejemplo en Windows (PowerShell + cURL)**
+```powershell
+# Convertir a Base64
+$Base64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("reporte.xlsx"))
+
+# Crear JSON
+$Json = @"
+{
+  "fileName": "reporte-ventas.xlsx",
+  "destinationPath": "/okm:root/documentos/excel",
+  "documentData": "$Base64",
+  "description": "Reporte de ventas",
+  "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+}
+"@
+
+# Enviar con cURL
+curl -X POST http://localhost:8080/api/images/upload/excel/json `
+  -H "Content-Type: application/json" `
+  -d $Json
 ```
 
 ---
@@ -186,7 +275,9 @@ public class ExcelUploadTest {
 pip install requests
 ```
 
-#### Script de Ejemplo
+#### Opción A: Multipart/Form-Data
+
+**Script de Ejemplo**
 ```python
 import requests
 import json
@@ -232,6 +323,61 @@ if __name__ == "__main__":
     )
 ```
 
+#### Opción B: JSON/Base64
+
+**Script de Ejemplo**
+```python
+import requests
+import json
+import base64
+
+def upload_excel_json(file_path, file_name, destination_path, description=""):
+    url = "http://localhost:8080/api/images/upload/excel/json"
+    
+    # Leer archivo y convertir a Base64
+    with open(file_path, 'rb') as f:
+        file_content = f.read()
+        base64_content = base64.b64encode(file_content).decode('utf-8')
+    
+    # Preparar el cuerpo JSON
+    payload = {
+        'fileName': file_name,
+        'destinationPath': destination_path,
+        'documentData': base64_content,
+        'description': description,
+        'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    }
+    
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    
+    # Enviar petición
+    response = requests.post(url, json=payload, headers=headers)
+    
+    # Procesar respuesta
+    if response.status_code == 201:
+        result = response.json()
+        print("✅ Subida exitosa (JSON)!")
+        print(f"Document ID: {result['documentId']}")
+        print(f"Path: {result['path']}")
+        print(json.dumps(result, indent=2))
+        return result
+    else:
+        print(f"❌ Error {response.status_code}")
+        print(response.text)
+        return None
+
+# Uso
+if __name__ == "__main__":
+    upload_excel_json(
+        file_path="C:/temp/reporte.xlsx",
+        file_name="reporte-ventas.xlsx",
+        destination_path="/okm:root/documentos/excel",
+        description="Reporte de ventas Q4 2025 (JSON)"
+    )
+```
+
 ---
 
 ### 6. JavaScript/Node.js (axios)
@@ -241,7 +387,9 @@ if __name__ == "__main__":
 npm install axios form-data
 ```
 
-#### Script de Ejemplo
+#### Opción A: Multipart/Form-Data
+
+**Script de Ejemplo**
 ```javascript
 const axios = require('axios');
 const FormData = require('form-data');
@@ -281,6 +429,62 @@ uploadExcel(
     'reporte-ventas.xlsx',
     '/okm:root/documentos/excel',
     'Reporte de ventas Q4 2025'
+).then(result => {
+    console.log('Proceso completado');
+}).catch(err => {
+    console.error('Error en la subida');
+});
+```
+
+#### Opción B: JSON/Base64
+
+**Script de Ejemplo**
+```javascript
+const axios = require('axios');
+const fs = require('fs');
+
+async function uploadExcelJson(filePath, fileName, destinationPath, description = '') {
+    const url = 'http://localhost:8080/api/images/upload/excel/json';
+    
+    // Leer archivo y convertir a Base64
+    const fileBuffer = fs.readFileSync(filePath);
+    const base64Content = fileBuffer.toString('base64');
+    
+    // Preparar el payload JSON
+    const payload = {
+        fileName: fileName,
+        destinationPath: destinationPath,
+        documentData: base64Content,
+        description: description,
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    };
+    
+    try {
+        const response = await axios.post(url, payload, {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        console.log('✅ Subida exitosa (JSON)!');
+        console.log('Document ID:', response.data.documentId);
+        console.log('Path:', response.data.path);
+        console.log('Response:', JSON.stringify(response.data, null, 2));
+        
+        return response.data;
+    } catch (error) {
+        console.error('❌ Error:', error.response?.status);
+        console.error('Message:', error.response?.data);
+        throw error;
+    }
+}
+
+// Uso
+uploadExcelJson(
+    'C:/temp/reporte.xlsx',
+    'reporte-ventas.xlsx',
+    '/okm:root/documentos/excel',
+    'Reporte de ventas Q4 2025 (JSON)'
 ).then(result => {
     console.log('Proceso completado');
 }).catch(err => {

@@ -261,7 +261,8 @@ import org.datum.openkm.dto.ExcelUploadRequest;
 ### Endpoints de Excel
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| POST | `/api/images/upload/excel` | Subir documento Excel (multipart) |
+| POST | `/api/images/upload/excel` | Subir documento Excel (multipart/form-data) |
+| POST | `/api/images/upload/excel/json` | Subir documento Excel (JSON/Base64) |
 
 ### Endpoints Existentes (Imágenes)
 | Método | Ruta | Descripción |
