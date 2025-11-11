@@ -5,10 +5,12 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
 import org.datum.openkm.client.OpenKMSDKClient;
 import org.datum.openkm.config.OpenKMConfig;
+import org.datum.openkm.dto.DownloadedDocument;
 import org.datum.openkm.dto.ExcelUploadRequest;
 import org.datum.openkm.dto.ImageUploadRequest;
 import org.datum.openkm.dto.ImageUploadResponse;
 import org.datum.openkm.exception.ImageUploadException;
+import org.datum.openkm.exception.OpenKMException;
 import org.jboss.logging.Logger;
 
 import java.time.LocalDateTime;
@@ -251,6 +253,42 @@ public class ImageUploadService {
      */
     public boolean testConnection() {
         return openKMClient.testConnection();
+    }
+
+    /**
+     * Descarga un documento desde OpenKM.
+     *
+     * @param docPath Ruta completa del documento en OpenKM
+     * @return DownloadedDocument con el contenido y tipo MIME
+     * @throws ImageUploadException si ocurre un error durante la descarga
+     * @throws OpenKMException si el documento no existe o hay un error en OpenKM
+     */
+    public DownloadedDocument downloadDocument(String docPath) throws ImageUploadException {
+        LOG.infof("=== Descargando documento desde OpenKM ===");
+        LOG.infof("Ruta: %s", docPath);
+
+        try {
+            // Descargar desde OpenKM usando HTTP Client
+            DownloadedDocument document = openKMClient.downloadDocument(docPath);
+
+            LOG.infof("Documento descargado exitosamente");
+            LOG.infof("Content-Type: %s", document.contentType());
+            LOG.infof("Tamaño: %d bytes", document.size());
+
+            return document;
+
+        } catch (OpenKMException e) {
+            // Re-lanzar excepciones de OpenKM (404, 500, etc.)
+            LOG.errorf("Error de OpenKM al descargar documento: %s", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            LOG.errorf("Error inesperado al descargar documento: %s", e.getMessage());
+            throw new ImageUploadException(
+                    "Error al descargar el documento: " + e.getMessage(),
+                    Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
+                    e
+            );
+        }
     }
 }
 

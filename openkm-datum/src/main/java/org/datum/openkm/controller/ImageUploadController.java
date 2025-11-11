@@ -9,6 +9,7 @@ import org.datum.openkm.dto.ExcelUploadRequest;
 import org.datum.openkm.dto.ImageUploadRequest;
 import org.datum.openkm.dto.ImageUploadResponse;
 import org.datum.openkm.dto.ErrorResponse;
+import org.datum.openkm.exception.ImageUploadException;
 import org.datum.openkm.service.ImageUploadService;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
@@ -94,35 +95,20 @@ public class ImageUploadController {
                 description = "Tipo MIME de la imagen", 
                 example = "image/jpeg"
             )
-            String mimeType) {
-        try {
-            LOG.infof("Recibiendo solicitud de subida de imagen: %s", fileName);
+            String mimeType) throws IOException {
+        LOG.infof("Recibiendo solicitud de subida de imagen: %s", fileName);
 
-            ImageUploadRequest request = new ImageUploadRequest();
-            request.setFileName(fileName != null ? fileName : file.fileName());
-            request.setDestinationPath(destinationPath != null ? destinationPath : "/okm:root/images");
-            request.setDescription(description);
-            request.setMimeType(mimeType != null ? mimeType : file.contentType());
+        ImageUploadRequest request = new ImageUploadRequest();
+        request.setFileName(fileName != null ? fileName : file.fileName());
+        request.setDestinationPath(destinationPath != null ? destinationPath : "/okm:root/images");
+        request.setDescription(description);
+        request.setMimeType(mimeType != null ? mimeType : file.contentType());
 
-            // Leer el archivo y convertirlo a byte[]
-            try {
-                request.setImageData(Files.readAllBytes(file.filePath()));
-            } catch (IOException e) {
-                LOG.error("Error al leer el archivo", e);
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity("Error al leer el archivo: " + e.getMessage())
-                        .build();
-            }
+        // Leer el archivo y convertirlo a byte[]
+        request.setImageData(Files.readAllBytes(file.filePath()));
 
-            ImageUploadResponse response = imageUploadService.uploadImage(request);
-            return Response.status(Response.Status.CREATED).entity(response).build();
-
-        } catch (Exception e) {
-            LOG.error("Error en el controlador de subida de imágenes", e);
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity("Error al procesar la solicitud: " + e.getMessage())
-                    .build();
-        }
+        ImageUploadResponse response = imageUploadService.uploadImage(request);
+        return Response.status(Response.Status.CREATED).entity(response).build();
     }
 
     @POST
@@ -168,18 +154,10 @@ public class ImageUploadController {
                 )
             )
             ImageUploadRequest request) {
-        try {
-            LOG.infof("Recibiendo solicitud JSON de subida de imagen: %s", request.getFileName());
+        LOG.infof("Recibiendo solicitud JSON de subida de imagen: %s", request.getFileName());
 
-            ImageUploadResponse response = imageUploadService.uploadImage(request);
-            return Response.status(Response.Status.CREATED).entity(response).build();
-
-        } catch (Exception e) {
-            LOG.error("Error en el controlador de subida de imágenes (JSON)", e);
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity("Error al procesar la solicitud: " + e.getMessage())
-                    .build();
-        }
+        ImageUploadResponse response = imageUploadService.uploadImage(request);
+        return Response.status(Response.Status.CREATED).entity(response).build();
     }
 
     @GET
@@ -252,47 +230,32 @@ public class ImageUploadController {
             
             @RestForm("description") 
             @Parameter(description = "Descripción del documento")
-            String description) {
-        try {
-            LOG.infof("Recibiendo solicitud de subida de documento Excel: %s", fileName);
+            String description) throws IOException {
+        LOG.infof("Recibiendo solicitud de subida de documento Excel: %s", fileName);
 
-            // Validar que el archivo no sea nulo
-            if (file == null) {
-                LOG.error("El archivo recibido es nulo");
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity("El archivo es requerido")
-                        .build();
-            }
-
-            // Construir el request con datos del Excel
-            ExcelUploadRequest request = ExcelUploadRequest.builder()
-                    .fileName(fileName != null ? fileName : file.fileName())
-                    .destinationPath(destinationPath != null ? destinationPath : "/okm:root/documentos/excel")
-                    .description(description)
-                    .mimeType(file.contentType() != null ? file.contentType() : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                    .build();
-
-            // Leer el archivo y convertirlo a byte[]
-            try {
-                LOG.infof("Leyendo el archivo Excel: %s", Files.readAllBytes(file.filePath()));
-                request.setDocumentData(Files.readAllBytes(file.filePath()));
-            } catch (IOException e) {
-                LOG.error("Error al leer el archivo Excel", e);
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity("Error al leer el archivo: " + e.getMessage())
-                        .build();
-            }
-
-            // Llamar al servicio para subir el documento
-            ImageUploadResponse response = imageUploadService.uploadExcelDocument(request);
-            return Response.status(Response.Status.CREATED).entity(response).build();
-
-        } catch (Exception e) {
-            LOG.error("Error en el controlador de subida de documentos Excel", e);
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity("Error al procesar la solicitud: " + e.getMessage())
-                    .build();
+        // Validar que el archivo no sea nulo
+        if (file == null) {
+            LOG.error("El archivo recibido es nulo");
+            throw new ImageUploadException(
+                "El archivo es requerido",
+                Response.Status.BAD_REQUEST.getStatusCode()
+            );
         }
+
+        // Construir el request con datos del Excel
+        ExcelUploadRequest request = ExcelUploadRequest.builder()
+                .fileName(fileName != null ? fileName : file.fileName())
+                .destinationPath(destinationPath != null ? destinationPath : "/okm:root/documentos/excel")
+                .description(description)
+                .mimeType(file.contentType() != null ? file.contentType() : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .build();
+
+        // Leer el archivo y convertirlo a byte[]
+        request.setDocumentData(Files.readAllBytes(file.filePath()));
+
+        // Llamar al servicio para subir el documento
+        ImageUploadResponse response = imageUploadService.uploadExcelDocument(request);
+        return Response.status(Response.Status.CREATED).entity(response).build();
     }
 
     @POST
@@ -338,17 +301,9 @@ public class ImageUploadController {
                 )
             )
             ExcelUploadRequest request) {
-        try {
-            LOG.infof("Recibiendo solicitud JSON de subida de documento Excel: %s", request.getFileName());
+        LOG.infof("Recibiendo solicitud JSON de subida de documento Excel: %s", request.getFileName());
 
-            ImageUploadResponse response = imageUploadService.uploadExcelDocument(request);
-            return Response.status(Response.Status.CREATED).entity(response).build();
-
-        } catch (Exception e) {
-            LOG.error("Error en el controlador de subida de documentos Excel (JSON)", e);
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity("Error al procesar la solicitud: " + e.getMessage())
-                    .build();
-        }
+        ImageUploadResponse response = imageUploadService.uploadExcelDocument(request);
+        return Response.status(Response.Status.CREATED).entity(response).build();
     }
 }

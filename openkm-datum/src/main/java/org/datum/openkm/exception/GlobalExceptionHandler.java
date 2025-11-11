@@ -8,6 +8,8 @@ import jakarta.ws.rs.ext.Provider;
 import org.datum.openkm.dto.ErrorResponse;
 import org.jboss.logging.Logger;
 
+import java.io.IOException;
+
 @Provider
 public class GlobalExceptionHandler implements ExceptionMapper<Exception> {
 
@@ -15,7 +17,11 @@ public class GlobalExceptionHandler implements ExceptionMapper<Exception> {
 
     @Override
     public Response toResponse(Exception exception) {
-        LOG.error("Excepción capturada", exception);
+        LOG.error("Excepción capturada por GlobalExceptionHandler", exception);
+
+        if (exception instanceof ImageUploadException imageUploadException) {
+            return handleImageUploadException(imageUploadException);
+        }
 
         if (exception instanceof OpenKMException openKMException) {
             return handleOpenKMException(openKMException);
@@ -25,7 +31,19 @@ public class GlobalExceptionHandler implements ExceptionMapper<Exception> {
             return handleConstraintViolationException(constraintException);
         }
 
+        if (exception instanceof IOException ioException) {
+            return handleIOException(ioException);
+        }
+
         return handleGenericException(exception);
+    }
+
+    private Response handleImageUploadException(ImageUploadException exception) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                exception.getMessage(),
+                exception.getStatusCode()
+        );
+        return Response.status(exception.getStatusCode()).entity(errorResponse).build();
     }
 
     private Response handleOpenKMException(OpenKMException exception) {
@@ -46,6 +64,14 @@ public class GlobalExceptionHandler implements ExceptionMapper<Exception> {
             errorResponse.addDetail(violation.getPropertyPath() + ": " + violation.getMessage());
         }
 
+        return Response.status(Response.Status.BAD_REQUEST).entity(errorResponse).build();
+    }
+
+    private Response handleIOException(IOException exception) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                "Error al leer el archivo: " + exception.getMessage(),
+                Response.Status.BAD_REQUEST.getStatusCode()
+        );
         return Response.status(Response.Status.BAD_REQUEST).entity(errorResponse).build();
     }
 

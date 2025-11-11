@@ -4,6 +4,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.entity.mime.MultipartEntityBuilder;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
@@ -14,6 +15,7 @@ import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.datum.openkm.config.OpenKMConfig;
+import org.datum.openkm.dto.DownloadedDocument;
 import org.datum.openkm.dto.OpenKMDocument;
 import org.datum.openkm.exception.OpenKMException;
 import org.jboss.logging.Logger;
@@ -306,5 +308,98 @@ public class OpenKMSDKClient {
             return matcher.group(1);
         }
         return null;
+    }
+
+    /**
+     * Descarga un documento desde OpenKM.
+     *
+     * @param docPath Ruta completa del documento en OpenKM (ej: /okm:root/images/foto.jpg)
+     * @return DownloadedDocument con el contenido del archivo y su tipo MIME
+     * @throws OpenKMException si ocurre un error durante la descarga
+     */
+    public DownloadedDocument downloadDocument(String docPath) {
+        String url = buildUrl("/Download");
+        
+        LOG.infof("=== Descargando documento de OpenKM ===");
+        LOG.infof("URL: %s", url);
+        LOG.infof("Ruta: %s", docPath);
+
+        HttpGet httpGet = new HttpGet(url + "?path=" + encodeUrlParameter(docPath));
+        
+        try {
+            // Agregar autenticación Basic
+            String auth = getBasicAuthHeader();
+            httpGet.setHeader("Authorization", auth);
+
+            LOG.debugf("Enviando petición GET...");
+
+            // Ejecutar petición
+            try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
+                int statusCode = response.getCode();
+
+                LOG.infof("Respuesta HTTP: %d", statusCode);
+
+                if (statusCode == 404) {
+                    LOG.errorf("Documento no encontrado: %s", docPath);
+                    throw new OpenKMException(
+                            String.format("Documento no encontrado: %s", docPath),
+                            404
+                    );
+                } else if (statusCode >= 200 && statusCode < 300) {
+                    // Obtener el tipo MIME de la respuesta desde el header Content-Type
+                    String contentType = "application/octet-stream"; // Valor por defecto
+                    
+                    // Intentar obtener el Content-Type del header de la respuesta
+                    if (response.getFirstHeader("Content-Type") != null) {
+                        contentType = response.getFirstHeader("Content-Type").getValue();
+                        // Limpiar el content-type (remover charset si existe)
+                        if (contentType.contains(";")) {
+                            contentType = contentType.split(";")[0].trim();
+                        }
+                    }
+
+                    // Leer el contenido del documento
+                    byte[] content = EntityUtils.toByteArray(response.getEntity());
+
+                    LOG.infof("Documento descargado exitosamente");
+                    LOG.infof("Content-Type: %s", contentType);
+                    LOG.infof("Tamaño: %d bytes", content.length);
+
+                    return new DownloadedDocument(content, contentType);
+                } else {
+                    String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+                    LOG.errorf("Error HTTP %d: %s", statusCode, responseBody);
+                    throw new OpenKMException(
+                            String.format("Error al descargar documento: HTTP %d - %s", statusCode, responseBody),
+                            statusCode
+                    );
+                }
+            }
+
+        } catch (OpenKMException e) {
+            throw e;
+        } catch (IOException | ParseException e) {
+            LOG.errorf("Error de I/O: %s", e.getMessage());
+            throw new OpenKMException(
+                    "Error de conexión con OpenKM: " + e.getMessage(),
+                    500,
+                    e
+            );
+        }
+    }
+
+    /**
+     * Codifica un parámetro de URL.
+     *
+     * @param value Valor a codificar
+     * @return Valor codificado
+     */
+    private String encodeUrlParameter(String value) {
+        try {
+            return java.net.URLEncoder.encode(value, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            LOG.warnf("Error al codificar parámetro: %s", e.getMessage());
+            return value;
+        }
     }
 }
