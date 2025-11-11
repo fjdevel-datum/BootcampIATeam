@@ -1,0 +1,103 @@
+#Primera Parte
+#Realiza la implementacion de interfaces para los servicios de Company y Country, refactoriza el servicio LlamalInvoicesExrtactionService eliminando el metodo
+extractWithRegexFallback y asegurate de que el servicio funcione correctamente con los metodos existentes.
+
+
+#Segunda parte
+#Se presenta la estructura de la base de datos como un conjunto de Entidades faltantes (Tablas), sus Propósitos y una lista de sus Atributos (Campos clave) con sus respectivas descripciones.
+#Esquema de Base de Datos para Gestión de Gastos Corporativos
+
+#Implementa las respectivas entidades, con sus respectivos servicios, repositorios y DTOs
+
+## users
+**Descripción:** Colaboradores de la organización y su relación con la empresa.  
+**Objetivo:** Identificar y autenticar usuarios con roles específicos.   
+**Campos clave:**
+-id
+-email: correo único para login (gestión mediante Keycloak).
+-name: nombre completo.
+-keycloak_id: identificador único asignado por el proveedor de autenticación.
+-role: rol de usuario (colaborador(Definir mejor) o admin).
+-company_id: empresa a la que pertenece el colaborador.
+-country_id: país en el que está registrado el usuario.
+-status: Estado del usuario
+ 
+
+## cards
+**Descripción:** Registro de tarjetas corporativas asignadas a usuarios y empresas.  
+**Objetivo:** Asociar gastos a la tarjeta correspondiente.  
+**Campos clave:**
+- id
+-user_id: colaborador responsable de la tarjeta.
+-company_id: empresa emisora de la tarjeta.
+-card_mask: número enmascarado de la tarjeta (ejemplo: **** **** **** 1234).
+-credit_limit: Limite de Credito
+-status: Estado de la tarjeta de Credito 
+
+## invoices
+**Descripción:** Representa los comprobantes fiscales cargados al sistema.  
+**Objetivo:** Centralizar documentos que respaldan los gastos.   
+**Campos clave:**
+-id
+-user_id: colaborador que registra la factura.
+-card_id: tarjeta utilizada.
+-company_id: empresa a la que se imputa el gasto.
+-country_id: país donde se emitió la factura.
+-original_file_url: ubicación del archivo digital en el almacenamiento.
+-thumbnail_url: vista previa para interfaz de usuario.
+-status: control de flujo del comprobante (Pendiente, Verificado, Rechazado, Borrador).
+ 
+
+## invoice_fields
+**Descripción:** Detalle estructurado de cada factura, resultado del OCR y LLM.  
+**Objetivo:** Guardar información fiscal normalizada para reportes.   
+**Campos clave:**
+-id
+-invoice_id
+-vendor_name: nombre del proveedor que emitió la factura.
+-invoice_date: fecha de emisión.
+-total_amount: monto total.
+-currency: moneda (ISO 4217, ej. USD, HNL, GTQ, mas paises).
+-concept: motivo del gasto.
+-category_id: clasificación del gasto.
+-cost_center_id: centro de costos imputado.
+-client_visited: requerido en gastos de representación.
+-notes: observaciones adicionales.
+ 
+
+## cost_centers
+**Descripción:** Catálogo de centros de costo.  
+**Objetivo:** Imputar cada gasto al área responsable.  
+**Campos clave:**
+- code: identificador contable (ej. 2.8.0).
+-description: descripción del centro de costo.
+-usage: detalle del propósito.
+-responsible: responsable del centro de costo.
+ 
+
+## categories
+**Descripción:** Catálogo de categorías de gastos.  
+**Objetivo:** Estandarizar la clasificación de gastos.  
+**Campos clave:**
+-id
+-name: nombre de la categoría.
+  
+
+## reports
+**Descripción:** Reportes de gastos generados por los colaboradores.  
+**Objetivo:** Consolidar gastos por períodos para liquidación y auditoría.  
+**Campos clave:**
+- id
+-user_id: colaborador dueño del reporte.
+-period_start / period_end: rango de fechas del reporte (ejemplo: mensual).
+-file_url: ubicación del reporte en PDF o Excel.
+-created_at: fecha de creación del reporte.
+-status
+ 
+
+## report_invoices
+**Descripción:** Tabla puente entre reportes y facturas (N:M).  
+**Objetivo:** Permitir relación múltiple entre reportes y facturas.  
+**Campos clave:**
+- report_id  
+- invoice_id  

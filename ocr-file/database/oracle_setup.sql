@@ -1,0 +1,2 @@
+-- Oracle Database setup script placeholder
+-- This file can be used to set up Oracle database for the OCR application
